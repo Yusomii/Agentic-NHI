@@ -1,0 +1,13 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+# Go
+/cmd/commander/commander
+vendor/
+
+# OS/IDE
+.DS_Store
+.vscode/
