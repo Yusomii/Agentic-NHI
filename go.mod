@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-lambda-go v1.53.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.2
+	github.com/slack-go/slack v0.19.0
 )
 
 require (
@@ -23,4 +24,5 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.9 // indirect
 	github.com/aws/smithy-go v1.24.2 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 )
