@@ -14,7 +14,7 @@ graph LR
     subgraph Zero-Trust Airgap
         C -->|HITL Payload Diff| E((Slack Webhook))
         E -->|Approve/Deny Action| F[Human SecOps]
-    end
+```
 
 ### The Data Flow
 1. **Ingress:** AWS CloudTrail captures IAM activity (e.g., `CreateUser`, `AttachRolePolicy`).
