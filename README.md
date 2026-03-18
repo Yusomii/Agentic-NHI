@@ -19,6 +19,17 @@ graph LR
 3. **Reasoning Engine:** The Go binary reconstructs the event context and queries Amazon Bedrock (Claude 3.5 Sonnet) to determine the malicious intent or blast radius of the action.
 4. **Human-in-the-Loop:** If the AI determines the action is anomalous, it pushes an interactive Block Kit payload to a secure Slack channel for immediate SecOps approval/denial.
 
+## 🧩 Detection Logic
+
+Anomalous behavior is defined by IAM activity deviating from expected execution baselines. The system combines structured heuristics with model-assisted classification to assess risk.
+
+Examples of flagged patterns include:
+- Privileged actions (e.g., `AttachUserPolicy`, `CreateAccessKey`) executed outside approved CI/CD roles
+- High-frequency API calls across multiple regions within short time intervals, indicating potential automated reconnaissance
+- IAM role or policy modifications not associated with known infrastructure workflows
+
+The Bedrock model is used to enrich context and assist classification, while final authorization decisions are enforced through a human-in-the-loop (HITL) approval process.
+
 ## 🛠 Tech Stack
 * **Core Application:** Go (1.22)
 * **Infrastructure as Code (IaC):** HashiCorp Terraform
