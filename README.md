@@ -1,10 +1,20 @@
 # Agentic-NHI Commander
 
-An event-driven, Zero-Trust AWS security engine designed to detect, analyze, and mitigate anomalous Non-Human Identity (NHI) behavior in real-time using Foundation Models.
+An event-driven AWS security orchestrator in Go that analyzes CloudTrail IAM activity using Amazon Bedrock and routes high-risk anomalies into a Slack-based Human-in-the-Loop (HITL) approval workflow.
 
-## 🏗 Architecture Overview
+## 🏗 Architecture & Flow Diagram
 
-Agentic-NHI is built on a serverless, Hexagonal Architecture pattern. It intercepts raw AWS management events, processes them through an AI reasoning engine (Claude via Amazon Bedrock), and initiates a Human-in-the-Loop (HITL) authorization flow via Slack.
+```mermaid
+graph LR
+    subgraph AWS Cloud
+        A[AWS CloudTrail] -->|IAM Events| B(Amazon EventBridge)
+        B -->|Trigger Payload| C{Agentic-NHI Go Lambda}
+        C <-->|Analyze Telemetry| D[Amazon Bedrock Claude 3.5]
+    end
+    subgraph Zero-Trust Airgap
+        C -->|HITL Payload Diff| E((Slack Webhook))
+        E -->|Approve/Deny Action| F[Human SecOps]
+    end
 
 ### The Data Flow
 1. **Ingress:** AWS CloudTrail captures IAM activity (e.g., `CreateUser`, `AttachRolePolicy`).
