@@ -3,13 +3,14 @@
 An event-driven AWS security orchestrator in Go that analyzes CloudTrail IAM activity using Amazon Bedrock and routes high-risk anomalies into a Slack-based Human-in-the-Loop (HITL) approval workflow.
 
 ## 🏗 Architecture & Flow Diagram
+
 ```mermaid
 graph LR
-    A[CloudTrail] -->|IAM Events| B[EventBridge]
-    B -->|Trigger| C[NHI Go Lambda]
-    C |Analyze| D[Bedrock Claude 3.5]
-    C -->|HITL Payload| E[Slack Webhook]
-    E -->|Approve or Deny| F[Human SecOps]
+    A[AWS CloudTrail] -->|IAM Events| B(Amazon EventBridge)
+    B -->|Trigger Payload| C{Agentic-NHI Go Lambda}
+    C <-->|Analyze Telemetry| D[Amazon Bedrock Claude 3.5]
+    C -->|HITL Payload Diff| E((Slack Webhook))
+    E -->|Approve/Deny Action| F[Human SecOps]
 ```
 
 ### The Data Flow
