@@ -11,9 +11,12 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
-// SlackInteraction represents the JSON envelope Slack sends
 type SlackInteraction struct {
 	Type    string `json:"type"`
 	Actions []struct {
@@ -22,7 +25,6 @@ type SlackInteraction struct {
 	} `json:"actions"`
 }
 
-// ActionPayload is the custom JSON we hid inside the button's Value field
 type ActionPayload struct {
 	Action string `json:"action"`
 	User   string `json:"user"`
@@ -32,7 +34,6 @@ type ActionPayload struct {
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
-
 	lambda.Start(handleRequest)
 }
 
@@ -60,7 +61,6 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 	if len(interaction.Actions) == 0 {
 		return clientError(http.StatusBadRequest, "no actions found")
 	}
-
 	action := interaction.Actions[0]
 
 	if action.ActionID == "ignore_alert" {
@@ -75,27 +75,65 @@ func handleRequest(ctx context.Context, req events.APIGatewayProxyRequest) (even
 			return clientError(http.StatusInternalServerError, "invalid internal payload")
 		}
 
-		slog.Info("EXECUTING KILL SWITCH", slog.String("target_key", target.Key), slog.String("target_user", target.User))
+		slog.Warn("EXECUTING KILL SWITCH", slog.String("target_key", target.Key), slog.String("target_user", target.User))
+		
+		// THE EXECUTION
+		if err := deactivateAccessKey(ctx, target.User, target.Key); err != nil {
+			slog.Error("failed to deactivate access key", slog.String("error", err.Error()))
+			return clientError(http.StatusInternalServerError, "failed to execute AWS IAM command")
+		}
 
-		// TODO: AWS SDK Call - iam.UpdateAccessKey(Status: Inactive) goes here.
-
+		slog.Info("THREAT NEUTRALIZED. IAM KEY IS NOW INACTIVE.")
 		return successResponse()
 	}
 
 	return successResponse()
 }
 
-// successResponse returns a 200 OK. Slack requires this within 3 seconds.
-func successResponse() (events.APIGatewayProxyResponse, error) {
-	return events.APIGatewayProxyResponse{
-		StatusCode: http.StatusOK,
-		Body:       "OK",
-	}, nil
+// deactivateAccessKey uses the AWS SDK to toggle the rogue key status to Inactive
+func deactivateAccessKey(ctx context.Context, userName string, accessKeyID string) error {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to load SDK config: %w", err)
+	}
+
+	client := iam.NewFromConfig(cfg)
+
+	_, err = client.UpdateAccessKey(ctx, &iam.UpdateAccessKeyInput{
+		AccessKeyId: aws.String(accessKeyID),
+		Status:      types.StatusTypeInactive,
+		UserName:    aws.String(userName),
+	})
+
+	if err != nil {
+		return fmt.Errorf("aws sdk error: %w", err)
+	}
+
+	return nil
 }
 
-func clientError(status int, msg string) (events.APIGatewayProxyResponse, error) {
+func successResponse() (events.APIGatewayProxyResponse, error) {
+
 	return events.APIGatewayProxyResponse{
-		StatusCode: status,
-		Body:       fmt.Sprintf(`{"error":"%s"}`, msg),
+
+		StatusCode: http.StatusOK, 
+
+		Body: "OK",
+
 	}, nil
+
+}
+
+
+
+func clientError(status int, msg string) (events.APIGatewayProxyResponse, error) {
+
+	return events.APIGatewayProxyResponse{
+
+		StatusCode: status, 
+
+		Body: fmt.Sprintf(`{"error":"%s"}`, msg),
+
+	}, nil
+
 }
