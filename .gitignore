@@ -3,6 +3,15 @@
 *.tfstate.*
 .terraform.tfstate.lock.info
 /cmd/commander/commander
-vendor/
+ivendor/
 .DS_Store
 .vscode/
+terraform.tfvars
+bin/
+bootstrap
+executioner
+*.zip
+out.json
+test_output.json
+response.json
+policy.json

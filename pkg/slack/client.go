@@ -28,23 +28,43 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
+// SendKillSwitchAlert constructs an interactive Block Kit UI and sends it to Slack
+func (c *Client) SendKillSwitchAlert(ctx context.Context, principal string, accessKey string, reason string) error {
+	// 1. The hidden payload embedded in the button for API Gateway
+	targetPayload := fmt.Sprintf(`{"action":"deactivate","user":"%s","key":"%s"}`, principal, accessKey)
+
+	// 2. Build the Header/Reasoning Block
+	headerText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("🚨 *High-Risk IAM Anomaly Detected*\n*Principal:* `%s`\n*Target Key:* `%s`\n*AI Assessment:* %s", principal, accessKey, reason), false, false)
+	headerSection := slack.NewSectionBlock(headerText, nil, nil)
+
+	// 3. Build the Interactive Buttons
+	approveBtnText := slack.NewTextBlockObject("plain_text", "Approve (Deactivate Key)", false, false)
+	// Notice we inject 'targetPayload' into the button's Value parameter here
+	approveBtn := slack.NewButtonBlockElement("execute_kill_switch", targetPayload, approveBtnText)
+	approveBtn.Style = slack.StyleDanger
+
+	denyBtnText := slack.NewTextBlockObject("plain_text", "Deny (False Positive)", false, false)
+	denyBtn := slack.NewButtonBlockElement("ignore_alert", "ignore", denyBtnText)
+
+	actionBlock := slack.NewActionBlock("actions", approveBtn, denyBtn)
+
+	// 4. Transmit to Slack
+	_, _, err := c.api.PostMessageContext(ctx, c.channelID, slack.MsgOptionBlocks(headerSection, actionBlock))
+	if err != nil {
+		return fmt.Errorf("failed to send interactive slack alert: %w", err)
+	}
+	
+	return nil
+}
+
+// Fallback method for basic errors (keeps your Graceful Degradation working)
 func (c *Client) SendAlert(ctx context.Context, eventSource, eventName string, isRogue bool) error {
 	if !isRogue {
 		return nil
 	}
 	header := slack.NewSectionBlock(slack.NewTextBlockObject("mrkdwn", "*🚨 Rogue NHI Activity Detected*", false, false), nil, nil)
-	details := slack.NewSectionBlock(slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Claude flagged:\n*Source:* %s\n*Action:* %s", eventSource, eventName), false, false), nil, nil)
+	details := slack.NewSectionBlock(slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("System flagged:\n*Source:* %s\n*Action:* %s", eventSource, eventName), false, false), nil, nil)
 	
-	approveBtn := slack.NewButtonBlockElement("approve", "approve", slack.NewTextBlockObject("plain_text", "Neutralize", false, false))
-	approveBtn.Style = slack.StylePrimary
-	denyBtn := slack.NewButtonBlockElement("deny", "deny", slack.NewTextBlockObject("plain_text", "Ignore", false, false))
-	denyBtn.Style = slack.StyleDanger
-	
-	actionBlock := slack.NewActionBlock("actions", approveBtn, denyBtn)
-	
-	_, _, err := c.api.PostMessageContext(ctx, c.channelID, slack.MsgOptionBlocks(header, details, actionBlock))
-	if err != nil {
-		return fmt.Errorf("failed to send slack alert: %w", err)
-	}
-	return nil
+	_, _, err := c.api.PostMessageContext(ctx, c.channelID, slack.MsgOptionBlocks(header, details))
+	return err
 }
