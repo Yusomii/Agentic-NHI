@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Deploy Agentic-NHI
 
 on:
   push:
@@ -13,33 +13,36 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Go
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.21' 
 
-      - name: Build
-        run: GOOS=linux GOARCH=arm64 go build -o bin/bootstrap ./cmd/commander/main.go
+      - name: Build Go Binaries
+        run: |
+          mkdir -p bin/commander bin/executioner
+          env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/commander/bootstrap ./cmd/commander
+          env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/executioner/bootstrap ./cmd/executioner
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::985688283435:role/github-actions-nhi-role
-          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::985688283435:role/agentic-nhi-github-actions
+          aws-region: us-west-2
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
+        working-directory: infra
         run: terraform init
-        working-directory: infra/
 
       - name: Terraform Apply
+        working-directory: infra
         run: terraform apply -auto-approve
-        working-directory: infra/
         env:
           TF_VAR_slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
           TF_VAR_slack_channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
