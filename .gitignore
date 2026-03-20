@@ -3,7 +3,7 @@
 *.tfstate.*
 .terraform.tfstate.lock.info
 /cmd/commander/commander
-ivendor/
+vendor/
 .DS_Store
 .vscode/
 terraform.tfvars
