@@ -1,3 +1,11 @@
+terraform {
+  backend "s3" {
+    bucket = "agentic-nhi-tfstate-985688283435"
+    key    = "state/terraform.tfstate"
+    region = "us-west-2"
+  }
+}
+
 variable "slack_bot_token" {
   type      = string
   sensitive = true
