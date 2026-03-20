@@ -80,16 +80,29 @@ func handleRequest(ctx context.Context, event CloudTrailEvent) error {
             continue 
         }
 
-        // 3. Human-in-the-Loop Routing
-        if isRogue {
-            slog.Warn("rogue behavior detected, requesting human approval")
-            if err := slackClient.SendAlert(ctx, record.EventSource, record.EventName, isRogue); err != nil {
-                slog.Error("failed to send slack alert", slog.String("error", err.Error()))
-                continue
-            }
-        } else {
-            slog.Info("event benign", slog.String("action", record.EventName))
-        }
+		// 3. Human-in-the-Loop Routing
+		if isRogue {
+			slog.Warn("rogue behavior detected, requesting human approval")
+			
+			// Extract the exact IAM identity data from the CloudTrail record
+			principal := record.UserIdentity.Arn
+			if principal == "" {
+				principal = record.UserIdentity.PrincipalID // Fallback if ARN is missing
+			}
+			accessKey := record.UserIdentity.AccessKeyID
+			if accessKey == "" {
+				accessKey = "No-Key-Provided"
+			}
+			reason := "Anomalous execution baseline detected via AI heuristics."
+			
+			// FIRE THE INTERACTIVE ALERT
+			if err := slackClient.SendKillSwitchAlert(ctx, principal, accessKey, reason); err != nil {
+				slog.Error("failed to send interactive slack alert", slog.String("error", err.Error()))
+				continue
+			}
+		} else {
+			slog.Info("event benign", slog.String("action", record.EventName))
+		}
     }
 
     return nil
