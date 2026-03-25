@@ -53,7 +53,7 @@ func (c *Client) SendKillSwitchAlert(ctx context.Context, principal string, acce
 	if err != nil {
 		return fmt.Errorf("failed to send interactive slack alert: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -64,7 +64,7 @@ func (c *Client) SendAlert(ctx context.Context, eventSource, eventName string, i
 	}
 	header := slack.NewSectionBlock(slack.NewTextBlockObject("mrkdwn", "*🚨 Rogue NHI Activity Detected*", false, false), nil, nil)
 	details := slack.NewSectionBlock(slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("System flagged:\n*Source:* %s\n*Action:* %s", eventSource, eventName), false, false), nil, nil)
-	
+
 	_, _, err := c.api.PostMessageContext(ctx, c.channelID, slack.MsgOptionBlocks(header, details))
 	return err
 }

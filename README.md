@@ -53,3 +53,8 @@ The infrastructure is fully automated. Pushing to the `main` branch triggers the
 2. Cross-compiles the Go application for `linux/arm64`.
 3. Assumes the AWS OIDC deployment role.
 4. Executes `terraform init` and `terraform apply` to synchronize the cloud state.
+
+## 🚧 Current Bottlenecks & Roadmap
+* **DynamoDB State Contention:** Currently encountering state-lock contention during high-volume EventBridge floods when attempting to track asynchronous remediation states.
+* **MCP Migration:** Evaluating a migration to a pull-based MCP (Model Context Protocol) server architecture to eliminate the database middleware entirely and directly route AWS telemetry to the Claude 3.5 context window.
+* **Lambda wildcard fix:** Attempting to fix executioner lambda with wildcard in future will remove to adhere to least privilege execution role
