@@ -58,3 +58,10 @@ The infrastructure is fully automated. Pushing to the `main` branch triggers the
 * **DynamoDB State Contention:** Currently encountering state-lock contention during high-volume EventBridge floods when attempting to track asynchronous remediation states.
 * **MCP Migration:** Evaluating a migration to a pull-based MCP (Model Context Protocol) server architecture to eliminate the database middleware entirely and directly route AWS telemetry to the Claude 3.5 context window.
 * **Lambda wildcard fix:** Attempting to fix executioner lambda with wildcard in future will remove to adhere to least privilege execution role
+
+## Current Engineering Focus: State-Lock Mitigation
+
+Currently refactoring the event-driven ingest pipeline to handle high-velocity telemetry floods. I am actively benchmarking the architectural trade-offs between two state-management models:
+
+* **Distributed Eventual Consistency:** Utilizing standard message queues for load-leveling to prevent downstream database write-throttling.
+* **Strict ACID Compliance:** Enforcing row-level locking via a relational database to eliminate race conditions and guarantee deterministic state updates during concurrent execution.
