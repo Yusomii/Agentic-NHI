@@ -54,7 +54,7 @@ func (c *Client) AnalyzeCloudTrailEvent(ctx context.Context, eventJSON []byte) (
 		return false, fmt.Errorf("failed to marshal bedrock payload: %w", err)
 	}
 
-	modelID := "anthropic.claude-3-5-sonnet-20241022-v2:0"
+	modelID := "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 	contentType := "application/json"
 
 	input := &bedrockruntime.InvokeModelInput{
