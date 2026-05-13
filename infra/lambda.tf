@@ -51,11 +51,20 @@ resource "aws_iam_role_policy" "lambda_policy" {
       Action = [
         "logs:CreateLogGroup",
         "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "iam:UpdateAccessKey"
+        "logs:PutLogEvents"
       ]
       Effect   = "Allow"
       Resource = "*"
+    },
+    {
+      Action = ["iam:UpdateAccessKey"]
+      Effect = "Allow"
+      Resource = "arn:aws:iam::*:user/*"
+    },
+    {
+      Action = ["bedrock:InvokeModel"]
+      Effect = "Allow"
+      Resource = "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0"
     }]
   })
 }

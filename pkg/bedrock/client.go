@@ -36,7 +36,7 @@ type message struct {
 }
 
 func (c *Client) AnalyzeCloudTrailEvent(ctx context.Context, eventJSON []byte) (bool, error) {
-	systemPrompt := "You are a Zero-Trust Cloud Security Engine. Analyze this AWS CloudTrail event. Reply with ONLY a JSON object containing a boolean field 'is_rogue'. True if the action indicates a compromised Non-Human Identity, false otherwise."
+	systemPrompt := "You are a Zero-Trust Cloud Security Engine. Analyze this AWS CloudTrail event. Reply with ONLY a JSON object containing a boolean field 'is_rogue'. True if the action indicates a compromised Non-Human Identity, false otherwise. Return absolutely no text, markdown, or explanation other than the raw JSON object."
 
 	payload := claudeRequest{
 		AnthropicVersion: "bedrock-2023-05-31",
@@ -72,6 +72,23 @@ func (c *Client) AnalyzeCloudTrailEvent(ctx context.Context, eventJSON []byte) (
 		return false, fmt.Errorf("received empty response from bedrock")
 	}
 
-	// Stub returning false for now. JSON parsing of Claude's output will go here.
+	var responseBody struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+
+	if err := json.Unmarshal(output.Body, &responseBody); err != nil {
+		return false, fmt.Errorf("failed to unmarshal bedrock response body: %w", err)
+	}
+
+	if len(responseBody.Content) > 0 {
+		// Clean the string in case Claude wraps it in markdown
+		rawText := responseBody.Content[0].Text
+		if rawText == `{"is_rogue": true}` || rawText == `{"is_rogue":true}` {
+			return true, nil
+		}
+	}
+
 	return false, nil
 }
