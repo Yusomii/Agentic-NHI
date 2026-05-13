@@ -55,7 +55,7 @@ func HandleRequest(ctx context.Context, rawEvent json.RawMessage) (string, error
 			return "", fmt.Errorf("failed to initialize slack client: %w", err)
 		}
 
-		if err := s.SendKillSwitchAlert(ctx, userName, keyId, "Claude 3.5 Sonnet identified anomalous IAM activity."); err != nil {
+		if err := s.SendKillSwitchAlert(ctx, userName, keyId, "Claude 4.6 Sonnet identified anomalous IAM activity."); err != nil {
 			return "", fmt.Errorf("failed to send slack alert: %w", err)
 		}
 		fmt.Printf("✅ ALERT SENT: %s\n", keyId)
@@ -69,4 +69,4 @@ func HandleRequest(ctx context.Context, rawEvent json.RawMessage) (string, error
 func main() { lambda.Start(HandleRequest) }
 
 // FORCED_STATE_UPDATE_01
-func init() { fmt.Println("V4_BINARY_FORCED_UPDATE") }
+func init() { fmt.Println("V5_BINARY_FORCED_UPDATE") }

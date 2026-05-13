@@ -54,7 +54,7 @@ func (c *Client) AnalyzeCloudTrailEvent(ctx context.Context, eventJSON []byte) (
 		return false, fmt.Errorf("failed to marshal bedrock payload: %w", err)
 	}
 
-	modelID := "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+	modelID := "us.anthropic.claude-sonnet-4-6"
 	contentType := "application/json"
 
 	input := &bedrockruntime.InvokeModelInput{
@@ -65,7 +65,7 @@ func (c *Client) AnalyzeCloudTrailEvent(ctx context.Context, eventJSON []byte) (
 
 	output, err := c.api.InvokeModel(ctx, input)
 	if err != nil {
-		return false, fmt.Errorf("failed to invoke claude 3.5 sonnet: %w", err)
+		return false, fmt.Errorf("failed to invoke claude 4.6 sonnet: %w", err)
 	}
 
 	if len(output.Body) == 0 {
