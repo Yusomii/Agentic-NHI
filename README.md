@@ -8,7 +8,7 @@ An event-driven AWS security orchestrator in Go that analyzes CloudTrail IAM act
 graph LR
     A[AWS CloudTrail] -->|IAM Events| B(Amazon EventBridge)
     B -->|Trigger Payload| C{Agentic-NHI Go Lambda}
-    C <-->|Analyze Telemetry| D[Amazon Bedrock Claude 3.5]
+    C <-->|Analyze Telemetry| D[Amazon Bedrock Claude 4.6 Sonnet]
     C -->|HITL Payload Diff| E((Slack Webhook))
     E -->|Approve/Deny Action| F[Human SecOps]
 ```
@@ -16,7 +16,7 @@ graph LR
 ### The Data Flow
 1. **Ingress:** AWS CloudTrail captures IAM activity (e.g., `CreateUser`, `AttachRolePolicy`).
 2. **Event Routing:** Amazon EventBridge filters high-risk events and triggers the Commander Lambda.
-3. **Reasoning Engine:** The Go binary reconstructs the event context and queries Amazon Bedrock (Claude 3.5 Sonnet) to determine the malicious intent or blast radius of the action.
+3. **Reasoning Engine:** The Go binary reconstructs the event context and queries Amazon Bedrock (Claude 4.6 Sonnet) to determine the malicious intent or blast radius of the action.
 4. **Human-in-the-Loop:** If the AI determines the action is anomalous, it pushes an interactive Block Kit payload to a secure Slack channel for immediate SecOps approval/denial.
 
 ## 🧩 Detection Logic
@@ -35,7 +35,7 @@ The Bedrock model is used to enrich context and assist classification, while fin
 * **Infrastructure as Code (IaC):** HashiCorp Terraform
 * **Cloud Provider:** Amazon Web Services (AWS)
 * **Compute & Security:** AWS Lambda, IAM (Least-Privilege Execution)
-* **AI/ML:** Amazon Bedrock (Claude 3.5 Sonnet)
+* **AI/ML:** Amazon Bedrock (Claude 4.6 Sonnet)
 * **CI/CD:** GitHub Actions (Zero-Trust OIDC Federation)
 
 ## 🔒 Security Posture & DevSecOps
@@ -56,7 +56,7 @@ The infrastructure is fully automated. Pushing to the `main` branch triggers the
 
 ## 🚧 Current Bottlenecks & Roadmap
 * **DynamoDB State Contention:** Currently encountering state-lock contention during high-volume EventBridge floods when attempting to track asynchronous remediation states.
-* **MCP Migration:** Evaluating a migration to a pull-based MCP (Model Context Protocol) server architecture to eliminate the database middleware entirely and directly route AWS telemetry to the Claude 3.5 context window.
+* **MCP Migration:** Evaluating a migration to a pull-based MCP (Model Context Protocol) server architecture to eliminate the database middleware entirely and directly route AWS telemetry to the Claude 4.6 context window.
 * **Lambda wildcard fix:** Attempting to fix executioner lambda with wildcard in future will remove to adhere to least privilege execution role
 
 ## Current Engineering Focus: State-Lock Mitigation
