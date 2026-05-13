@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
-// Global client initialized during "Init" phase to reuse across warm starts
 var iamSvc *iam.Client
 
 func init() {
@@ -37,19 +36,29 @@ func HandleRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) 
 		body = string(decoded)
 	}
 
-	// Slack sends interactivity as a URL-encoded string: payload={JSON}
+	fmt.Printf("DEBUG [PHASE 1]: Raw Body Length: %d\n", len(body))
+
 	vals, _ := url.ParseQuery(body)
 	payloadRaw := vals.Get("payload")
 	if payloadRaw == "" {
+		fmt.Println("DEBUG [SILENT DROP A]: payloadRaw is empty. Could not extract URL-encoded payload.")
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "OK"}, nil
 	}
 
 	var p SlackPayload
 	if err := json.Unmarshal([]byte(payloadRaw), &p); err != nil {
+		fmt.Printf("DEBUG [SILENT DROP B]: JSON Unmarshal error: %v\n", err)
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "JSON Error"}, nil
 	}
 
-	if len(p.Actions) > 0 && p.Actions[0].ActionID == "deactivate_key" {
+	if len(p.Actions) == 0 {
+		fmt.Println("DEBUG [SILENT DROP C]: No actions found in Slack payload array.")
+		return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "No Actions"}, nil
+	}
+
+	fmt.Printf("DEBUG [PHASE 2]: Received ActionID: '%s' | Value: '%s'\n", p.Actions[0].ActionID, p.Actions[0].Value)
+
+	if p.Actions[0].ActionID == "deactivate_key" {
 		parts := strings.Split(p.Actions[0].Value, "|")
 		if len(parts) == 2 {
 			user, key := parts[0], parts[1]
@@ -63,7 +72,11 @@ func HandleRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) 
 			} else {
 				fmt.Printf("✅ KILLED: %s\n", key)
 			}
+		} else {
+			fmt.Printf("DEBUG [SILENT DROP D]: Value splitting failed. Expected 2 parts, got %d.\n", len(parts))
 		}
+	} else {
+		fmt.Printf("DEBUG [SILENT DROP E]: ActionID '%s' did not match expected 'deactivate_key'.\n", p.Actions[0].ActionID)
 	}
 
 	return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "Processed"}, nil
