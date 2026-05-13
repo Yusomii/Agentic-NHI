@@ -64,7 +64,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
     {
       Action = ["bedrock:InvokeModel"]
       Effect = "Allow"
-      Resource = "arn:aws:bedrock:us-west-2:985688283435:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+      Resource = ["arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0", "arn:aws:bedrock:us-west-2:985688283435:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0"]
     }]
   })
 }
