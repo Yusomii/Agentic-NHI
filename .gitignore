@@ -1,17 +1,26 @@
+# Terraform State & Secrets (CRITICAL)
 .terraform/
 *.tfstate
 *.tfstate.*
 .terraform.tfstate.lock.info
+terraform.tfvars
+
+# Compiled Binaries & Archives
+bin/
+/bootstrap
+/executioner
 /cmd/commander/commander
-vendor/
+*.zip
+
+# IDE & OS Artifacts
 .DS_Store
 .vscode/
-terraform.tfvars
-bin/
-bootstrap
-executioner
-*.zip
+
+# Ephemeral Telemetry & Test Logs
 out.json
 test_output.json
 response.json
 policy.json
+
+# Go Modules
+vendor/
