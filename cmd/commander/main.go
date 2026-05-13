@@ -67,4 +67,6 @@ func HandleRequest(ctx context.Context, rawEvent json.RawMessage) (string, error
 }
 
 func main() { lambda.Start(HandleRequest) }
+
 // FORCED_STATE_UPDATE_01
+func init() { fmt.Println("V2_BINARY_FORCED_UPDATE") }
