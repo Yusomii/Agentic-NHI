@@ -57,14 +57,6 @@ resource "aws_iam_role_policy" "lambda_policy" {
       Resource = "*"
     },
     {
-      Action = [
-        "aws-marketplace:ViewSubscriptions",
-        "aws-marketplace:Subscribe"
-      ]
-      Effect   = "Allow"
-      Resource = "*"
-    },
-    {
       Action = ["iam:UpdateAccessKey"]
       Effect = "Allow"
       Resource = "arn:aws:iam::*:user/*"
