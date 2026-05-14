@@ -54,7 +54,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
         "logs:PutLogEvents",
         "sqs:ReceiveMessage",
         "sqs:DeleteMessage",
-        "sqs:GetQueueAttributes"
+        "sqs:GetQueueAttributes",
+        "iam:ListAccessKeys",
+        "iam:ListAttachedUserPolicies"
       ]
       Effect   = "Allow"
       Resource = "*"
