@@ -51,7 +51,10 @@ resource "aws_iam_role_policy" "lambda_policy" {
       Action = [
         "logs:CreateLogGroup",
         "logs:CreateLogStream",
-        "logs:PutLogEvents"
+        "logs:PutLogEvents",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes"
       ]
       Effect   = "Allow"
       Resource = "*"
@@ -150,20 +153,49 @@ resource "aws_cloudwatch_event_rule" "local_processor" {
   })
 }
 
-# 2. The Target (Link the Catcher to the Commander)
-resource "aws_cloudwatch_event_target" "commander_target" {
-  rule      = aws_cloudwatch_event_rule.local_processor.name
-  target_id = "TriggerCommander"
-  arn       = aws_lambda_function.commander.arn
+# --- V3 SQS DECOUPLING INFRASTRUCTURE ---
+
+resource "aws_sqs_queue" "commander_dlq" {
+  name = "agentic-nhi-commander-dlq"
 }
 
-# 3. The Permission (Allow EventBridge to wake up the Commander)
-resource "aws_lambda_permission" "allow_eventbridge" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.commander.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.local_processor.arn
+resource "aws_sqs_queue" "commander_queue" {
+  name = "agentic-nhi-commander-queue"
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.commander_dlq.arn
+    maxReceiveCount     = 3
+  })
+}
+
+# Allow EventBridge to push to SQS
+resource "aws_sqs_queue_policy" "eventbridge_sqs_policy" {
+  queue_url = aws_sqs_queue.commander_queue.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = { Service = "events.amazonaws.com" }
+      Action = "sqs:SendMessage"
+      Resource = aws_sqs_queue.commander_queue.arn
+      Condition = {
+        ArnEquals = { "aws:SourceArn" = aws_cloudwatch_event_rule.local_processor.arn }
+      }
+    }]
+  })
+}
+
+# 2. The Target (Link the Catcher to the SQS Queue)
+resource "aws_cloudwatch_event_target" "sqs_target" {
+  rule      = aws_cloudwatch_event_rule.local_processor.name
+  target_id = "SendToCommanderQueue"
+  arn       = aws_sqs_queue.commander_queue.arn
+}
+
+# 3. The Trigger (Link the SQS Queue to the Commander Lambda)
+resource "aws_lambda_event_source_mapping" "sqs_commander_trigger" {
+  event_source_arn = aws_sqs_queue.commander_queue.arn
+  function_name    = aws_lambda_function.commander.arn
+  batch_size       = 1
 }
 # --- GitHub Actions CI/CD Deployment Trust ---
 

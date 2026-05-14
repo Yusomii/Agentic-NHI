@@ -7,6 +7,7 @@ import (
 
 	"github.com/Yusomii/agentic-nhi/pkg/bedrock"
 	"github.com/Yusomii/agentic-nhi/pkg/slack"
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 )
 
@@ -23,50 +24,56 @@ type EventBridgeEvent struct {
 	} `json:"detail"`
 }
 
-func HandleRequest(ctx context.Context, rawEvent json.RawMessage) (string, error) {
-	var event EventBridgeEvent
-	if err := json.Unmarshal(rawEvent, &event); err != nil {
-		return "Ignored: Malformed Payload", nil
-	}
+func HandleRequest(ctx context.Context, sqsEvent events.SQSEvent) error {
+	for _, record := range sqsEvent.Records {
+		var event EventBridgeEvent
+		
+		// 1. Unwrap the SQS Envelope
+		if err := json.Unmarshal([]byte(record.Body), &event); err != nil {
+			fmt.Printf("❌ SQS Unwrap Fail (Malformed): %v\n", err)
+			continue // Do not return error, drop malformed payload so it doesn't loop
+		}
 
-	userName := event.Detail.RequestParameters.UserName
-	keyId := event.Detail.ResponseElements.AccessKey.AccessKeyId
+		userName := event.Detail.RequestParameters.UserName
+		keyId := event.Detail.ResponseElements.AccessKey.AccessKeyId
 
-	if keyId == "" || userName == "" {
-		return "Ignored: Missing Key ID or Username", nil
-	}
+		if keyId == "" || userName == "" {
+			fmt.Println("⚠️ Ignored: Missing Key ID or Username")
+			continue
+		}
 
-	// 1. Initialize Bedrock Client
-	b, err := bedrock.NewClient(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to initialize bedrock client: %w", err)
-	}
-
-	// 2. Execute AI Telemetry Analysis
-	isRogue, err := b.AnalyzeCloudTrailEvent(ctx, rawEvent)
-	if err != nil {
-		return "", fmt.Errorf("bedrock analysis failed: %w", err)
-	}
-
-	// 3. Conditional HITL Alerting
-	if isRogue {
-		s, err := slack.NewClient()
+		// 2. Initialize Bedrock Client
+		b, err := bedrock.NewClient(ctx)
 		if err != nil {
-			return "", fmt.Errorf("failed to initialize slack client: %w", err)
+			return fmt.Errorf("bedrock init failed: %w", err) // Returns error to SQS for retry
 		}
 
-		if err := s.SendKillSwitchAlert(ctx, userName, keyId, "Claude 4.6 Sonnet identified anomalous IAM activity."); err != nil {
-			return "", fmt.Errorf("failed to send slack alert: %w", err)
+		// 3. Execute AI Telemetry Analysis using the raw CloudTrail string
+		isRogue, err := b.AnalyzeCloudTrailEvent(ctx, json.RawMessage(record.Body))
+		if err != nil {
+			return fmt.Errorf("bedrock analysis failed: %w", err) // Returns error to SQS for retry
 		}
-		fmt.Printf("✅ ALERT SENT: %s\n", keyId)
-		return "Alert Success", nil
+
+		// 4. Conditional HITL Alerting
+		if isRogue {
+			s, err := slack.NewClient()
+			if err != nil {
+				return fmt.Errorf("slack init failed: %w", err)
+			}
+
+			if err := s.SendKillSwitchAlert(ctx, userName, keyId, "Claude 4.6 Sonnet identified anomalous IAM activity."); err != nil {
+				return fmt.Errorf("slack alert failed: %w", err)
+			}
+			fmt.Printf("✅ ALERT SENT: %s\n", keyId)
+		} else {
+			fmt.Printf("✅ EVENT VERIFIED BENIGN: %s\n", keyId)
+		}
 	}
-
-	fmt.Printf("✅ EVENT VERIFIED BENIGN: %s\n", keyId)
-	return "Benign Event Ignored", nil
+	
+	// Successful execution tells SQS to delete the message
+	return nil 
 }
 
 func main() { lambda.Start(HandleRequest) }
 
-// FORCED_STATE_UPDATE_01
-func init() { fmt.Println("V7_BINARY_FORCED_UPDATE") }
+func init() { fmt.Println("V8_BINARY_FORCED_UPDATE_SQS") }
