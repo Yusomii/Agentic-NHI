@@ -13,7 +13,7 @@ graph TD
 
     %% Analysis Plane (Least Privilege: Read Only)
     C -->|Trigger Batch| D{Commander Lambda}
-    D <-->|Evaluate Threat| E[Amazon Bedrock: Claude 3.5 Sonnet]
+    D <-->|Evaluate Threat| E[Amazon Bedrock: Claude 4.6 Sonnet]
     D -->|Dispatch Context| F((Slack Webhook))
 
     %% Human-in-the-Loop
