@@ -1,8 +1,8 @@
-# Agentic-NHI Commander
+# Agentic-NHI: Event-Driven Zero-Trust Security Orchestrator
 
-An event-driven AWS security orchestrator in Go that analyzes CloudTrail IAM activity using Amazon Bedrock and routes high-risk anomalies into a Slack-based Human-in-the-Loop (HITL) approval workflow.
+An enterprise-grade, event-driven AWS security orchestrator written in Go. Agentic-NHI automatically ingests anomalous CloudTrail IAM telemetry, evaluates threat vectors utilizing Amazon Bedrock (Claude 4.6 Sonnet), and enforces a strict Human-in-the-Loop (HITL) approval workflow via cryptographically verified Slack webhooks before executing programmatic remediation.
 
-## 🏗 Architecture & Flow Diagram
+## 🏗 Decoupled Architecture & Data Flow
 
 ```mermaid
 graph TD
@@ -25,55 +25,51 @@ graph TD
     I -->|Remediate| J[AWS IAM Controls]
 ```
 
-### The Data Flow
-1. **Ingress:** AWS CloudTrail captures IAM activity (e.g., `CreateUser`, `AttachRolePolicy`).
-2. **Event Routing:** Amazon EventBridge filters high-risk events and triggers the Commander Lambda.
-3. **Reasoning Engine:** The Go binary reconstructs the event context and queries Amazon Bedrock (Claude 4.6 Sonnet) to determine the malicious intent or blast radius of the action.
-4. **Human-in-the-Loop:** If the AI determines the action is anomalous, it pushes an interactive Block Kit payload to a secure Slack channel for immediate SecOps approval/denial.
+### The Telemetry Pipeline
 
-## 🧩 Detection Logic
+1. **Ingress & Buffering:** AWS CloudTrail captures high-risk IAM activity. EventBridge routes these payloads into an Amazon SQS buffer, decoupling ingestion velocity from compute processing limits.
+2. **The Analysis Plane (Commander):** A Go-based AWS Lambda consumes the SQS batches. It reconstructs the event context and queries Amazon Bedrock to determine the blast radius of the anomalous action. This execution role has zero infrastructure write permissions.
+3. **Human-in-the-Loop (HITL):** If the reasoning engine classifies the action as a critical threat, it dispatches an interactive Block Kit payload to a secure Slack channel for SecOps review.
+4. **The Execution Plane (Executioner):** SecOps approval triggers a callback to an Amazon API Gateway. The Gateway validates the cryptographic Slack HMAC signature and invokes the isolated Executioner Lambda to isolate the compromised IAM entity.
 
-Anomalous behavior is defined by IAM activity deviating from expected execution baselines. The system combines structured heuristics with model-assisted classification to assess risk.
+## 🔒 Security Posture & DevSecOps Guardrails
 
-Examples of flagged patterns include:
-- Privileged actions (e.g., `AttachUserPolicy`, `CreateAccessKey`) executed outside approved CI/CD roles
-- High-frequency API calls across multiple regions within short time intervals, indicating potential automated reconnaissance
-- IAM role or policy modifications not associated with known infrastructure workflows
+This architecture is designed to map against rigorous compliance frameworks (e.g., NIST 800-171, CMMC) by enforcing zero-trust principles at every layer:
 
-The Bedrock model is used to enrich context and assist classification, while final authorization decisions are enforced through a human-in-the-loop (HITL) approval process.
+* **Zero-Trust CI/CD (OIDC):** The GitHub Actions pipeline explicitly denies the use of long-lived AWS Access Keys. It relies on an OpenID Connect (OIDC) federation trust, requesting temporary, short-lived STS tokens to execute `terraform apply`.
+* **Blast Radius Isolation (Dual-Compute):** The application is split into two distinct binaries (`cmd/commander` and `cmd/executioner`). If the logic plane is compromised, the attacker still lacks the IAM permissions to alter infrastructure.
+* **Cryptographic Perimeter Defense:** The remediation execution endpoint is shielded by an API Gateway that enforces strict token-bucket rate limits and requires SHA256 header signature validation, dropping unauthorized payloads before compute initialization.
+* **Immutable Infrastructure:** 100% of the cloud topology (Queues, EventBridge rules, API Gateways, IAM Roles) is defined deterministically via HashiCorp Terraform (`infra/`).
 
-## 🛠 Tech Stack
-* **Core Application:** Go (1.22)
-* **Infrastructure as Code (IaC):** HashiCorp Terraform
-* **Cloud Provider:** Amazon Web Services (AWS)
-* **Compute & Security:** AWS Lambda, IAM (Least-Privilege Execution)
-* **AI/ML:** Amazon Bedrock (Claude 4.6 Sonnet)
-* **CI/CD:** GitHub Actions (Zero-Trust OIDC Federation)
+## ⚙️ System Reliability & Evolved Architecture
 
-## 🔒 Security Posture & DevSecOps
+### Resolving State-Lock Contention via SQS Decoupling
 
-This project adheres to strict enterprise security standards:
-* **Zero-Trust Deployment:** The GitHub Actions pipeline does **not** use long-lived AWS Access Keys. It relies entirely on an OpenID Connect (OIDC) bridge, requesting temporary, short-lived STS tokens for Terraform deployments.
-* **Ephemeral Compute:** The Go binary runs in a transient AWS Lambda environment, meaning there are no permanent servers to patch or expose to edge vulnerabilities.
-* **Least-Privilege IAM:** The Lambda execution role only contains the exact `bedrock:InvokeModel` and `logs:PutLogEvents` permissions required to operate.
-* **Secret Management:** Slack OAuth tokens are injected securely at runtime via Terraform variables mapped to GitHub Actions encrypted secrets.
+* **The Vulnerability (v1):** The initial synchronous architecture triggered EventBridge to invoke Lambda directly. During a simulated credential-stuffing attack, concurrent telemetry floods caused extreme DynamoDB write-throttling and permanent alert dropping due to API rate limits.
+* **The Patch (v2):** The ingestion pipeline was re-architected to implement Distributed Eventual Consistency. By injecting an Amazon SQS load-leveling buffer and a Dead Letter Queue (DLQ), ingestion is mathematically decoupled from compute. Traffic bursts are safely queued, eliminating state-lock contention and guaranteeing telemetry persistence.
 
-## 🚀 Deployment Pipeline
+### Resolving Wildcard Permissions via Role Bifurcation
 
-The infrastructure is fully automated. Pushing to the `main` branch triggers the GitHub Actions workflow, which:
-1. Provisions an Ubuntu runner.
-2. Cross-compiles the Go application for `linux/arm64`.
-3. Assumes the AWS OIDC deployment role.
-4. Executes `terraform init` and `terraform apply` to synchronize the cloud state.
+* **The Vulnerability (v1):** Early iterations utilized a single monolithic Lambda execution role containing broad IAM wildcards to handle both Bedrock inference and IAM remediation.
+* **The Patch (v2):** Strict Least-Privilege was enforced. The Commander role only possesses `bedrock:InvokeModel` and `sqs:ReceiveMessage`. The Executioner role operates in a completely detached security group with tightly scoped IAM revocation permissions.
 
-## 🚧 Current Bottlenecks & Roadmap
-* **DynamoDB State Contention:** Currently encountering state-lock contention during high-volume EventBridge floods when attempting to track asynchronous remediation states.
-* **MCP Migration:** Evaluating a migration to a pull-based MCP (Model Context Protocol) server architecture to eliminate the database middleware entirely and directly route AWS telemetry to the Claude 4.6 context window.
-* **Lambda wildcard fix:** Attempting to fix executioner lambda with wildcard in future will remove to adhere to least privilege execution role
+## 🛠 Tech Stack Core
 
-## Current Engineering Focus: State-Lock Mitigation
+* **Systems Programming:** Go 1.22 (Statically linked `linux/arm64` binaries)
+* **Infrastructure as Code:** HashiCorp Terraform (HCL)
+* **Cloud Primitives:** AWS (Lambda, SQS, API Gateway, EventBridge, IAM)
+* **AI/Inference:** Amazon Bedrock (Anthropic Claude 3.5 Sonnet)
+* **Deployment Automation:** GitHub Actions
 
-Currently refactoring the event-driven ingest pipeline to handle high-velocity telemetry floods. I am actively benchmarking the architectural trade-offs between two state-management models:
+## 🚀 Automated Deployment
 
-* **Distributed Eventual Consistency:** Utilizing standard message queues for load-leveling to prevent downstream database write-throttling.
-* **Strict ACID Compliance:** Enforcing row-level locking via a relational database to eliminate race conditions and guarantee deterministic state updates during concurrent execution.
+Deployments are strictly pipeline-driven to prevent configuration drift. Pushing to `main` triggers the CI/CD workflow:
+
+1. Provisions an isolated Ubuntu build runner.
+2. Cross-compiles the dual Go binaries.
+3. Authenticates via short-lived OIDC federated tokens.
+4. Executes `terraform init` and `terraform apply` to synchronize the AWS environment.
+
+```
+
+```
