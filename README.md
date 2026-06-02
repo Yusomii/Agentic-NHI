@@ -25,37 +25,6 @@ graph TD
     I -->|Remediate| J[AWS IAM Controls]
 ```
 
-Here is the fully formatted v2 architecture `README.md` in a single copy-pasteable block.
-
-```markdown
-# Agentic-NHI: Event-Driven Zero-Trust Security Orchestrator
-
-An enterprise-grade, event-driven AWS security orchestrator written in Go. Agentic-NHI automatically ingests anomalous CloudTrail IAM telemetry, evaluates threat vectors utilizing Amazon Bedrock (Claude 3.5 Sonnet), and enforces a strict Human-in-the-Loop (HITL) approval workflow via cryptographically verified Slack webhooks before executing programmatic remediation.
-
-## 🏗 Decoupled Architecture & Data Flow
-
-```mermaid
-graph TD
-    %% Ingestion & Decoupling Layer
-    A[AWS CloudTrail] -->|Anomalous IAM Events| B(Amazon EventBridge)
-    B -->|Route Pattern| C[(Amazon SQS Buffer)]
-    C -.->|Failure Fallback| DLQ[(Dead Letter Queue)]
-
-    %% Analysis Plane (Least Privilege: Read Only)
-    C -->|Trigger Batch| D{Commander Lambda}
-    D <-->|Evaluate Threat| E[Amazon Bedrock: Claude 3.5 Sonnet]
-    D -->|Dispatch Context| F((Slack Webhook))
-
-    %% Human-in-the-Loop
-    F -->|Review Diff| G[Human SecOps]
-
-    %% Execution Plane (Isolated Blast Radius)
-    G -->|Cryptographic Approval| H[Amazon API Gateway]
-    H -->|Invoke| I{Executioner Lambda}
-    I -->|Remediate| J[AWS IAM Controls]
-
-```
-
 ### The Telemetry Pipeline
 
 1. **Ingress & Buffering:** AWS CloudTrail captures high-risk IAM activity. EventBridge routes these payloads into an Amazon SQS buffer, decoupling ingestion velocity from compute processing limits.
