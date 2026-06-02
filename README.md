@@ -5,12 +5,24 @@ An event-driven AWS security orchestrator in Go that analyzes CloudTrail IAM act
 ## 🏗 Architecture & Flow Diagram
 
 ```mermaid
-graph LR
-    A[AWS CloudTrail] -->|IAM Events| B(Amazon EventBridge)
-    B -->|Trigger Payload| C{Agentic-NHI Go Lambda}
-    C <-->|Analyze Telemetry| D[Amazon Bedrock Claude 4.6 Sonnet]
-    C -->|HITL Payload Diff| E((Slack Webhook))
-    E -->|Approve/Deny Action| F[Human SecOps]
+graph TD
+    %% Ingestion & Decoupling Layer
+    A[AWS CloudTrail] -->|Anomalous IAM Events| B(Amazon EventBridge)
+    B -->|Route Pattern| C[(Amazon SQS Buffer)]
+    C -.->|Failure Fallback| DLQ[(Dead Letter Queue)]
+
+    %% Analysis Plane (Least Privilege: Read Only)
+    C -->|Trigger Batch| D{Commander Lambda}
+    D <-->|Evaluate Threat| E[Amazon Bedrock: Claude 3.5 Sonnet]
+    D -->|Dispatch Context| F((Slack Webhook))
+
+    %% Human-in-the-Loop
+    F -->|Review Diff| G[Human SecOps]
+
+    %% Execution Plane (Isolated Blast Radius)
+    G -->|Cryptographic Approval| H[Amazon API Gateway]
+    H -->|Invoke| I{Executioner Lambda}
+    I -->|Remediate| J[AWS IAM Controls]
 ```
 
 ### The Data Flow
