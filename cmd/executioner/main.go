@@ -2,10 +2,17 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -33,11 +40,54 @@ type ActionValue struct {
 	Key  string `json:"key"`
 }
 
+func verifySlackSignature(headers map[string]string, body string, secret string) bool {
+	if secret == "" {
+		fmt.Println("❌ SLACK_SIGNING_SECRET is not set")
+		return false
+	}
+	var sig, timestamp string
+	for k, v := range headers {
+		lowerK := strings.ToLower(k)
+		if lowerK == "x-slack-signature" {
+			sig = v
+		}
+		if lowerK == "x-slack-request-timestamp" {
+			timestamp = v
+		}
+	}
+	if sig == "" || timestamp == "" {
+		return false
+	}
+
+	ts, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return false
+	}
+	if time.Now().Unix()-ts > 300 {
+		return false // replay attack
+	}
+
+	baseString := fmt.Sprintf("v0:%s:%s", timestamp, body)
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(baseString))
+	mySig := "v0=" + hex.EncodeToString(h.Sum(nil))
+
+	return hmac.Equal([]byte(mySig), []byte(sig))
+}
+
 func HandleRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	body := request.Body
 	if request.IsBase64Encoded {
-		decoded, _ := base64.StdEncoding.DecodeString(body)
-		body = string(decoded)
+		decoded, err := base64.StdEncoding.DecodeString(body)
+		if err == nil {
+			body = string(decoded)
+		}
+	}
+
+	secret := os.Getenv("SLACK_SIGNING_SECRET")
+	if !verifySlackSignature(request.Headers, body, secret) {
+		fmt.Println("❌ INVALID SLACK SIGNATURE")
+		return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "Unauthorized"}, nil
 	}
 
 	vals, _ := url.ParseQuery(body)
@@ -55,7 +105,6 @@ func HandleRequest(ctx context.Context, request events.APIGatewayV2HTTPRequest) 
 		return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "No Actions"}, nil
 	}
 
-	// Aligned with Commander Payload Schema
 	if p.Actions[0].ActionID == "execute_kill_switch" {
 		var val ActionValue
 		if err := json.Unmarshal([]byte(p.Actions[0].Value), &val); err == nil {

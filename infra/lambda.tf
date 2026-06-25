@@ -16,6 +16,11 @@ variable "slack_channel_id" {
   sensitive = true
 }
 
+variable "slack_signing_secret" {
+  type      = string
+  sensitive = true
+}
+
 # 1. Deployment Packages (Pointing to subfolders)
 data "archive_file" "commander_zip" {
   type        = "zip"
@@ -64,7 +69,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
     {
       Action = ["iam:UpdateAccessKey"]
       Effect = "Allow"
-      Resource = "arn:aws:iam::*:user/*"
+      Resource = "arn:aws:iam::*:user/nhi/*"
     },
     {
       Action = ["bedrock:InvokeModel"]
@@ -106,6 +111,12 @@ resource "aws_lambda_function" "executioner" {
   runtime          = "provided.al2023"
   architectures    = ["arm64"]
   memory_size      = 256
+
+  environment {
+    variables = {
+      SLACK_SIGNING_SECRET = var.slack_signing_secret
+    }
+  }
 }
 
 # 5. API Gateway (The "Front Door")
@@ -227,10 +238,15 @@ resource "aws_iam_role" "github_actions" {
   })
 }
 
-# 3. Grant Terraform the permissions it needs to deploy
-resource "aws_iam_role_policy_attachment" "gh_actions_admin" {
+# 3. Grant Terraform the permissions it needs to deploy (Scoped down from AdministratorAccess)
+resource "aws_iam_role_policy_attachment" "gh_actions_poweruser" {
   role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "gh_actions_iam" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/IAMFullAccess"
 }
 
 output "github_role_arn" {

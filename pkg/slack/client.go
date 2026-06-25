@@ -2,6 +2,7 @@ package slack
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -31,7 +32,13 @@ func NewClient() (*Client, error) {
 // SendKillSwitchAlert constructs an interactive Block Kit UI and sends it to Slack
 func (c *Client) SendKillSwitchAlert(ctx context.Context, principal string, accessKey string, reason string) error {
 	// 1. The hidden payload embedded in the button for API Gateway
-	targetPayload := fmt.Sprintf(`{"action":"deactivate","user":"%s","key":"%s"}`, principal, accessKey)
+	type btnPayload struct {
+		Action string `json:"action"`
+		User   string `json:"user"`
+		Key    string `json:"key"`
+	}
+	payloadBytes, _ := json.Marshal(btnPayload{Action: "deactivate", User: principal, Key: accessKey})
+	targetPayload := string(payloadBytes)
 
 	// 2. Build the Header/Reasoning Block
 	headerText := slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("🚨 *High-Risk IAM Anomaly Detected*\n*Principal:* `%s`\n*Target Key:* `%s`\n*AI Assessment:* %s", principal, accessKey, reason), false, false)

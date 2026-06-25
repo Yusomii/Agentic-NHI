@@ -24,7 +24,9 @@ type EventBridgeEvent struct {
 	} `json:"detail"`
 }
 
-func HandleRequest(ctx context.Context, sqsEvent events.SQSEvent) error {
+func HandleRequest(ctx context.Context, sqsEvent events.SQSEvent) (events.SQSEventResponse, error) {
+	var response events.SQSEventResponse
+
 	for _, record := range sqsEvent.Records {
 		var event EventBridgeEvent
 		
@@ -45,24 +47,32 @@ func HandleRequest(ctx context.Context, sqsEvent events.SQSEvent) error {
 		// 2. Initialize Bedrock Client
 		b, err := bedrock.NewClient(ctx)
 		if err != nil {
-			return fmt.Errorf("bedrock init failed: %w", err) // Returns error to SQS for retry
+			fmt.Printf("❌ bedrock init failed: %v\n", err)
+			response.BatchItemFailures = append(response.BatchItemFailures, events.SQSBatchItemFailure{ItemIdentifier: record.MessageId})
+			continue
 		}
 
 		// 3. Execute AI Telemetry Analysis using the raw CloudTrail string
 		isRogue, err := b.AnalyzeCloudTrailEvent(ctx, json.RawMessage(record.Body))
 		if err != nil {
-			return fmt.Errorf("bedrock analysis failed: %w", err) // Returns error to SQS for retry
+			fmt.Printf("❌ bedrock analysis failed: %v\n", err)
+			response.BatchItemFailures = append(response.BatchItemFailures, events.SQSBatchItemFailure{ItemIdentifier: record.MessageId})
+			continue
 		}
 
 		// 4. Conditional HITL Alerting
 		if isRogue {
 			s, err := slack.NewClient()
 			if err != nil {
-				return fmt.Errorf("slack init failed: %w", err)
+				fmt.Printf("❌ slack init failed: %v\n", err)
+				response.BatchItemFailures = append(response.BatchItemFailures, events.SQSBatchItemFailure{ItemIdentifier: record.MessageId})
+				continue
 			}
 
-			if err := s.SendKillSwitchAlert(ctx, userName, keyId, "Claude 4.6 Sonnet identified anomalous IAM activity."); err != nil {
-				return fmt.Errorf("slack alert failed: %w", err)
+			if err := s.SendKillSwitchAlert(ctx, userName, keyId, "Claude Sonnet identified anomalous IAM activity."); err != nil {
+				fmt.Printf("❌ slack alert failed: %v\n", err)
+				response.BatchItemFailures = append(response.BatchItemFailures, events.SQSBatchItemFailure{ItemIdentifier: record.MessageId})
+				continue
 			}
 			fmt.Printf("✅ ALERT SENT: %s\n", keyId)
 		} else {
@@ -70,8 +80,8 @@ func HandleRequest(ctx context.Context, sqsEvent events.SQSEvent) error {
 		}
 	}
 	
-	// Successful execution tells SQS to delete the message
-	return nil 
+	// Successful execution tells SQS to delete the message (except failed ones)
+	return response, nil 
 }
 
 func main() { lambda.Start(HandleRequest) }

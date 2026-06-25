@@ -46,3 +46,4 @@ jobs:
         env:
           TF_VAR_slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
           TF_VAR_slack_channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
+          TF_VAR_slack_signing_secret: ${{ secrets.SLACK_SIGNING_SECRET }}
